@@ -12,9 +12,9 @@ Screen-AOI Attention (PR-calibrated)
        用 PR 分數進行 Hysteresis（二門檻+最短持續）得到 Focused
 
 極簡用法：
-  python 123.py                         # 自動找最新一組
-  python 123.py 20251001_211123         # 指定 STAMP
-  python 123.py 20251001_211123 --outdir results --no-plot
+  python AttentionGazeKit.py                         # 自動找最新一組
+  python AttentionGazeKit.py 20251001_211123         # 指定 STAMP
+  python AttentionGazeKit.py 20251001_211123 --outdir results --no-plot
 """
 
 import argparse
