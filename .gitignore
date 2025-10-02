@@ -4,10 +4,11 @@
 # 允許進入所有資料夾（否則無法往下匹配檔案）
 !*/
 
-# 只追蹤 Python 檔（任何階層）
+# 允許 Python 程式檔
 !*.py
 !**/*.py
 
-# 保留必要的版本控制設定檔
+# 允許 README 與 Git 設定檔
+!README.md
 !.gitignore
 !.gitattributes
