@@ -50,7 +50,6 @@ def directional_percentiles(df: pd.DataFrame) -> (list[str], np.ndarray):
         p = percentile_rank_vector(df[m].to_numpy(float))
         if m in ("BCEA","GTE","BlinkRate","BlinkFrac"):
             p = 1.0 - p  # 小越好 → 反轉
-        # 如果全 NaN，略過該軸
         if not np.isfinite(p).any(): continue
         labels.append(m)
         cols.append(p)
@@ -58,8 +57,8 @@ def directional_percentiles(df: pd.DataFrame) -> (list[str], np.ndarray):
         raise RuntimeError("沒有可用的指標可畫雷達圖。")
     return labels, np.vstack(cols).T  # shape: (N_windows, N_metrics_kept)
 
-def radar(ax, labels, values, title):
-    # values: shape (K,) in [0,1]
+def radar(ax, labels, values, title="", label=None):
+    """畫一個雷達圖多邊形 (values: shape (K,) in [0,1])"""
     N = len(labels)
     angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
     angles += angles[:1]  # close
@@ -69,9 +68,11 @@ def radar(ax, labels, values, title):
     ax.set_theta_direction(-1)
     ax.set_thetagrids(np.degrees(angles[:-1]), labels)
     ax.set_ylim(0, 1)
-    ax.plot(angles, v, linewidth=1.5)
+    line, = ax.plot(angles, v, linewidth=1.5, label=label)   # 加上 label
     ax.fill(angles, v, alpha=0.15)
-    ax.set_title(title, pad=14)
+    if title:
+        ax.set_title(title, pad=14)
+    return line
 
 def main():
     ap = argparse.ArgumentParser()
@@ -83,10 +84,10 @@ def main():
 
     win_csv = Path(f"{args.stamp}__windows.csv")
     if not win_csv.exists():
-        raise FileNotFoundError(f"找不到 {win_csv.name}，請先跑 123.py 產生 windows.csv")
+        raise FileNotFoundError(f"找不到 {win_csv.name}，請先跑 AttentionGazeKit.py 產生 windows.csv")
     df = pd.read_csv(win_csv)
 
-    # 1) 轉成方向一致化的百分位矩陣  (N_windows × N_metrics_kept)
+    # 1) 轉成方向一致化的百分位矩陣
     labels, P = directional_percentiles(df)
 
     # 2) 整體雷達（各指標中位數）
@@ -98,23 +99,24 @@ def main():
     fig.savefig(out1, dpi=150); plt.close(fig)
     print(f"[OK] Radar (overall) → {out1}")
 
-    # 3) Top-K 視窗雷達（依 AttentionScore，若無則依 overall 接近度排序）
+    # 3) Top-K 視窗雷達
     if "AttentionScore" in df.columns and df["AttentionScore"].notna().any():
         top_idx = df["AttentionScore"].to_numpy(float).argsort()[::-1][:args.topk]
     else:
-        # 無 AttentionScore 時：用與 overall 的 cosine 相似度挑前 K
         def csim(a,b):
             na = np.linalg.norm(a); nb = np.linalg.norm(b)
             return -np.inf if na==0 or nb==0 else float(a@b/(na*nb))
         sims = np.array([csim(P[i], overall) for i in range(P.shape[0])])
         top_idx = np.argsort(sims)[::-1][:args.topk]
 
-    # 畫多個窗的雷達（每窗一個多邊形）
     fig = plt.figure(figsize=(7,7)); ax = fig.add_subplot(111, projection='polar')
+    handles = []
     for rank, i in enumerate(top_idx, 1):
-        title = f"Top{rank}: {df.loc[i,'start']:.1f}-{df.loc[i,'end']:.1f}s"
-        radar(ax, labels, P[i], title="")
+        label = f"Top{rank}: {df.loc[i,'start']:.1f}-{df.loc[i,'end']:.1f}s"
+        h = radar(ax, labels, P[i], title="", label=label)
+        handles.append(h)
     ax.set_title(f"Top-{len(top_idx)} windows — {args.stamp}", pad=14)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))  # 顯示 TopN 來源
     fig.tight_layout()
     out2 = outdir / f"{args.stamp}__radar_top{len(top_idx)}.png"
     fig.savefig(out2, dpi=150); plt.close(fig)
